@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -101,27 +100,16 @@ func (p *FnosProxy) reloadSid() error {
 		return nil
 	}
 
-	passwords, err := p.qb.GetPasswords()
+	password, err := p.qb.GetPassword()
 	if err != nil {
 		return fmt.Errorf("get password: %w", err)
 	}
-
-	var lastErr error
-	for _, password := range passwords {
-		if err := p.login(password); err != nil {
-			lastErr = err
-			// stop on ban, further attempts only make it worse
-			if errors.Is(err, errBanned) {
-				break
-			}
-			continue
-		}
-		return nil
+	if err := p.login(password); err != nil {
+		// Do not retry automatically: repeated failures can trigger qBittorrent's ban.
+		return err
 	}
-	return lastErr
+	return nil
 }
-
-var errBanned = errors.New("too many login attempts, ip banned")
 
 func (p *FnosProxy) login(password string) error {
 	data := url.Values{}
@@ -137,7 +125,7 @@ func (p *FnosProxy) login(password string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusForbidden {
-		return errBanned
+		return fmt.Errorf("qBittorrent rejected login with HTTP 403; refusing to retry")
 	}
 	if err := p.updateSid(resp); err != nil {
 		return fmt.Errorf("update SID from cookies: %w", err)

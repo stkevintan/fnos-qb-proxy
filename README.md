@@ -6,14 +6,39 @@ fnOS 中自带了一个下载器（基于 qBittorrent 和 Aria2），但默认�
 
 该项目是一个简单的代理，能绕过这些限制，提供在外部访问 fnOS 的 qBittorrent 的能力同时不影响 fnOS 自身的下载器运行
 
-## 密码从哪里来
+## Password capture
 
-qBittorrent 的 WebUI 密码由 fnOS 下载中心（`dlcenter`）在每次启动时随机生成，通过 `--webui-password` 传给 `trim-qbittorrent-nox`。
+fnOS's download center (`dlcenter`) generates a random WebUI password on every qBittorrent start and passes it through `--webui-password`. Current fnOS releases mask that argument after startup, so the proxy cannot reliably read it from `/proc/<pid>/cmdline`.
 
-- 旧版本：密码明文留在 `/proc/<qbittorrent pid>/cmdline` 里，直接读参数即可。
-- 下载中心 `v0.2.18` 起：qBittorrent 启动后会把该参数原地改写成等长的 `*`（如 `--webui-password=********`），此时代理会去下载中心进程的内存里找它登录 qBittorrent 时发出的 `username=admin&password=...` 请求体，从中取回当前密码。
+This repository includes `cmd/fnos-qb-wrapper`, a small launcher that captures the password before replacing itself with the real qBittorrent process via `syscall.Exec`. It writes a `0600` credential record containing the password, qBittorrent PID, and WebUI socket path. The proxy accepts the credential only when its PID matches the live qBittorrent process.
 
-因此**代理需要以 root 运行，并且能看到宿主机的 PID namespace**（systemd 默认满足，Docker 需要 `pid: "host"`）。拿不到密码时，日志里会出现 `recover masked webui-password` 相关报错。
+### Wrapper installation
+
+Back up the fnOS binary and install the wrapper at the original path:
+
+```bash
+sudo install -m 0755 /usr/trim/bin/trim-qbittorrent-nox \
+  /usr/trim/bin/trim-qbittorrent-nox.real
+sudo install -m 0755 fnos-qb-wrapper /usr/trim/bin/trim-qbittorrent-nox
+sudo install -d -m 0700 -o kevin -g Users /home/kevin/.config/fnos-qb-proxy
+```
+
+The wrapper defaults to:
+
+```text
+Real binary:   /usr/trim/bin/trim-qbittorrent-nox.real
+Credentials:   /home/kevin/.config/fnos-qb-proxy/credential.json
+```
+
+Override these paths with `FNOS_QB_REAL_BINARY` and `FNOS_QB_CREDENTIAL_FILE` if needed. The wrapper preserves the original arguments, environment, file descriptors, PID, parent process, and `--stop-with-process` behavior.
+
+If fnOS replaces the binary during an upgrade, restore the wrapper and `.real` backup after the upgrade. To roll back:
+
+```bash
+sudo mv /usr/trim/bin/trim-qbittorrent-nox.real /usr/trim/bin/trim-qbittorrent-nox
+```
+
+No `/proc/<pid>/mem` scanning or dlcenter memory inspection is used.
 
 
 ## Get Started
@@ -68,6 +93,7 @@ Before=dlcenter.service
 [Service]
 ExecStart=/usr/bin/fnos-qb-proxy
 Restart=always
+Environment=FNOS_QB_CREDENTIAL_FILE=/home/kevin/.config/fnos-qb-proxy/credential.json
 
 [Install]
 WantedBy=multi-user.target
