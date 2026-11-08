@@ -6,6 +6,15 @@ fnOS 中自带了一个下载器（基于 qBittorrent 和 Aria2），但默认�
 
 该项目是一个简单的代理，能绕过这些限制，提供在外部访问 fnOS 的 qBittorrent 的能力同时不影响 fnOS 自身的下载器运行
 
+## 密码从哪里来
+
+qBittorrent 的 WebUI 密码由 fnOS 下载中心（`dlcenter`）在每次启动时随机生成，通过 `--webui-password` 传给 `trim-qbittorrent-nox`。
+
+- 旧版本：密码明文留在 `/proc/<qbittorrent pid>/cmdline` 里，直接读参数即可。
+- 下载中心 `v0.2.18` 起：qBittorrent 启动后会把该参数原地改写成等长的 `*`（如 `--webui-password=********`），此时代理会去下载中心进程的内存里找它登录 qBittorrent 时发出的 `username=admin&password=...` 请求体，从中取回当前密码。
+
+因此**代理需要以 root 运行，并且能看到宿主机的 PID namespace**（systemd 默认满足，Docker 需要 `pid: "host"`）。拿不到密码时，日志里会出现 `recover masked webui-password` 相关报错。
+
 
 ## Get Started
 

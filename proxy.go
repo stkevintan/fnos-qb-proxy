@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -100,13 +101,32 @@ func (p *FnosProxy) reloadSid() error {
 		return nil
 	}
 
+	passwords, err := p.qb.GetPasswords()
+	if err != nil {
+		return fmt.Errorf("get password: %w", err)
+	}
+
+	var lastErr error
+	for _, password := range passwords {
+		if err := p.login(password); err != nil {
+			lastErr = err
+			// stop on ban, further attempts only make it worse
+			if errors.Is(err, errBanned) {
+				break
+			}
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
+var errBanned = errors.New("too many login attempts, ip banned")
+
+func (p *FnosProxy) login(password string) error {
 	data := url.Values{}
 	data.Set("username", "admin")
-	if password, err := p.qb.GetPassword(); err != nil {
-		return fmt.Errorf("get password: %w", err)
-	} else {
-		data.Set("password", password)
-	}
+	data.Set("password", password)
 
 	resp, err := p.fetch("POST", "/api/v2/auth/login", strings.NewReader(data.Encode()), func(req *http.Request) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -116,6 +136,9 @@ func (p *FnosProxy) reloadSid() error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusForbidden {
+		return errBanned
+	}
 	if err := p.updateSid(resp); err != nil {
 		return fmt.Errorf("update SID from cookies: %w", err)
 	}
