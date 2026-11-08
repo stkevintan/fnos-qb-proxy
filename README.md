@@ -20,14 +20,14 @@ Back up the fnOS binary and install the wrapper at the original path:
 sudo install -m 0755 /usr/trim/bin/trim-qbittorrent-nox \
   /usr/trim/bin/trim-qbittorrent-nox.real
 sudo install -m 0755 fnos-qb-wrapper /usr/trim/bin/trim-qbittorrent-nox
-sudo install -d -m 0700 -o kevin -g Users /home/kevin/.config/fnos-qb-proxy
+sudo install -d -m 0700 -o kevin -g Users /run/fnos-qb-proxy
 ```
 
 The wrapper defaults to:
 
 ```text
 Real binary:   /usr/trim/bin/trim-qbittorrent-nox.real
-Credentials:   /home/kevin/.config/fnos-qb-proxy/credential.json
+Credentials:   /run/fnos-qb-proxy/credential.json
 ```
 
 Override these paths with `FNOS_QB_REAL_BINARY` and `FNOS_QB_CREDENTIAL_FILE` if needed. The wrapper preserves the original arguments, environment, file descriptors, PID, parent process, and `--stop-with-process` behavior.
@@ -93,7 +93,7 @@ Before=dlcenter.service
 [Service]
 ExecStart=/usr/bin/fnos-qb-proxy
 Restart=always
-Environment=FNOS_QB_CREDENTIAL_FILE=/home/kevin/.config/fnos-qb-proxy/credential.json
+Environment=FNOS_QB_CREDENTIAL_FILE=/run/fnos-qb-proxy/credential.json
 
 [Install]
 WantedBy=multi-user.target

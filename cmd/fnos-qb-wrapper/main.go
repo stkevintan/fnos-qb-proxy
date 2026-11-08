@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultRealBinary = "/usr/trim/bin/trim-qbittorrent-nox.real"
-	defaultCredential = "/home/kevin/.config/fnos-qb-proxy/credential.json"
+	defaultCredential = "/run/fnos-qb-proxy/credential.json"
 )
 
 type credential struct {

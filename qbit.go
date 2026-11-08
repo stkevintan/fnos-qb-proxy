@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const defaultCredentialFile = "/home/kevin/.config/fnos-qb-proxy/credential.json"
+const defaultCredentialFile = "/run/fnos-qb-proxy/credential.json"
 
 type Qbit struct {
 	password string
