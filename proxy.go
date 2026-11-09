@@ -21,6 +21,7 @@ type FnosProxy struct {
 	sid              string
 	port             int
 	qb               *Qbit
+	credentials      *credentialStore
 }
 
 func NewFnosProxy(debug bool, expectedPassword string, port int) *FnosProxy {
@@ -34,11 +35,14 @@ func NewFnosProxy(debug bool, expectedPassword string, port int) *FnosProxy {
 			}
 		},
 	}
+	credentials := newCredentialStore()
+	qb.credentials = credentials
 	p := &FnosProxy{
 		debug:            debug,
 		expectedPassword: expectedPassword,
 		port:             port,
 		qb:               qb,
+		credentials:      credentials,
 	}
 
 	p.ReverseProxy = &httputil.ReverseProxy{

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -9,18 +8,13 @@ import (
 	"strings"
 )
 
-const defaultCredentialFile = "/run/fnos-qb-proxy/credential.json"
+const defaultCredentialSocket = "/run/fnos-qb-proxy/credential.sock"
 
 type Qbit struct {
-	password string
-	uds      string
-	pid      int
-}
-
-type credential struct {
-	PID      int    `json:"pid"`
-	Password string `json:"password"`
-	UDS      string `json:"uds"`
+	password    string
+	uds         string
+	pid         int
+	credentials *credentialStore
 }
 
 func NewQbit() *Qbit {
@@ -35,8 +29,13 @@ func (q *Qbit) GetPassword() (string, error) {
 }
 
 func (q *Qbit) GetUds() (string, error) {
-	if err := q.refresh(); err != nil {
-		return "", fmt.Errorf("refresh qbittorrent parameters: %w", err)
+	pid, cmdline, err := findQbittorrentProcess()
+	if err != nil {
+		return "", fmt.Errorf("find process: %w", err)
+	}
+	q.pid = pid
+	if q.uds, err = getCmdParams(cmdline, "webui-sock-path"); err != nil {
+		return "", fmt.Errorf("get webui-sock-path: %w", err)
 	}
 	return q.uds, nil
 }
@@ -54,25 +53,18 @@ func (q *Qbit) refresh() error {
 		return fmt.Errorf("get webui-sock-path: %w", err)
 	}
 
-	path := os.Getenv("FNOS_QB_CREDENTIAL_FILE")
-	if path == "" {
-		path = defaultCredentialFile
+	credentialSocket := os.Getenv("FNOS_QB_CREDENTIAL_SOCKET")
+	if credentialSocket == "" {
+		credentialSocket = defaultCredentialSocket
 	}
-	data, err := os.ReadFile(path)
+	if q.credentials == nil {
+		return fmt.Errorf("credential store is not configured")
+	}
+	password, err := q.credentials.get(pid, q.uds)
 	if err != nil {
-		return fmt.Errorf("read credential file %q: %w", path, err)
+		return fmt.Errorf("read credential from %q: %w", credentialSocket, err)
 	}
-	var c credential
-	if err := json.Unmarshal(data, &c); err != nil {
-		return fmt.Errorf("parse credential file: %w", err)
-	}
-	if c.PID != pid {
-		return fmt.Errorf("credential belongs to pid %d, current qBittorrent pid is %d", c.PID, pid)
-	}
-	if c.Password == "" || isMasked(c.Password) {
-		return fmt.Errorf("credential file contains no usable password")
-	}
-	q.password = c.Password
+	q.password = password
 	return nil
 }
 
@@ -86,14 +78,16 @@ func findQbittorrentProcess() (int, string, error) {
 		if err != nil {
 			continue
 		}
+		exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+		if err != nil || (!strings.HasSuffix(exe, "/trim-qbittorrent-nox") && !strings.HasSuffix(exe, "/trim-qbittorrent-nox.real")) {
+			continue
+		}
 		content, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
 		if err != nil {
 			continue
 		}
 		cmdline := strings.ReplaceAll(string(content), "\x00", " ")
-		if strings.Contains(cmdline, "trim-qbittorrent-nox") {
-			return pid, cmdline, nil
-		}
+		return pid, cmdline, nil
 	}
 	return 0, "", fmt.Errorf("qbittorrent-nox process not found")
 }
