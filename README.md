@@ -13,6 +13,7 @@ fnOS 的下载器基于 qBittorrent 和 Aria2，qBittorrent 默认通过 Unix so
 ```text
 客户端 -> fnos-qb-proxy:8080 -> qBittorrent Unix socket
 ```
+## Get Started
 
 ## 工作方式
 
@@ -63,15 +64,17 @@ sudo install -o root -g root -m 0755 \
   /tmp/fnos-qb-proxy /usr/bin/fnos-qb-proxy
 ```
 
-查看帮助：
+运行后，访问 `http://{host}:8080` 即可进入 qBittorrent WebUI。默认情况会自动登录，如果通过 `--password` 指定了密码，则只有该密码可访问；`--port` 修改运行端口
 
 ```bash
 sudo /usr/bin/fnos-qb-proxy --help
 ```
 
-### 2. 直接前台运行
+### Configure Systemd Service
 
-由于新版 fnOS 通常需要读取 dlcenter 内存，建议使用 `sudo`：
+上面的命令会一直在前台运行，可以使用 Systemd 配置成 daemon 在后台自动运行
+
+移动 binary 到 `/usr/bin`
 
 ```bash
 sudo /usr/bin/fnos-qb-proxy
@@ -83,10 +86,8 @@ sudo /usr/bin/fnos-qb-proxy
 http://<fnOS-IP>:8080
 ```
 
-如果指定了 `--password`，访问代理时需要使用这个密码；如果不指定，代理会自动登录 fnOS qBittorrent：
+将以下配置写入到 `/etc/systemd/system/fnos-qb-proxy.service`，可自行修改命令参数
 
-```bash
-sudo /usr/bin/fnos-qb-proxy --password 'your-proxy-password' --port 8080
 ```
 
 停止前台进程时按 `Ctrl+C`。
@@ -113,47 +114,20 @@ WantedBy=multi-user.target
 EOF
 ```
 
-启用并启动：
+启用服务
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now fnos-qb-proxy.service
 ```
 
-检查状态和日志：
+查看服务状态，成功运行
 
 ```bash
 sudo systemctl status fnos-qb-proxy.service
 sudo journalctl -u fnos-qb-proxy.service -f
 ```
 
-服务启动后访问：
+### Docker 部署
 
-```text
-http://<fnOS-IP>:8080
-```
-
-### 注意事项
-
-- `Before=dlcenter.service` 只在两个服务由 systemd 同时启动时控制启动顺序。
-- 如果 dlcenter 已经运行，建议重启一次下载中心，让代理能够观察到当前 qBittorrent 和 dlcenter 状态：
-
-  ```bash
-  sudo systemctl restart dlcenter.service
-  ```
-
-- 如果代理重启，密码会再次从 dlcenter 内存中读取，不需要重新安装或替换 qBittorrent。
-- 如果 qBittorrent 登录失败返回 `403`，不要连续重试，否则可能触发 qBittorrent 的登录封禁。
-- 不建议将 `8080` 直接暴露到公网。需要外网访问时，请配置代理密码、防火墙和访问控制。
-
-## Docker
-
-Docker 使用方式请参考 [Docker-Install.md](Docker-Install.md)。Docker 部署不修改宿主机的 qBittorrent binary；新版 fnOS 的内存读取需要额外的宿主机 PID namespace、root 权限和 ptrace 能力。
-
-## 开发
-
-运行测试：
-
-```bash
-go test ./...
-```
+见 [Docker-Install.md](/Docker-Install.md).
